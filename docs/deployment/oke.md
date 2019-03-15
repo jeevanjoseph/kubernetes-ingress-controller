@@ -3,17 +3,16 @@
 ## Requirements
 
 1. An Oracle Container Engine for Kubernetes (OKE) cluster.
-   
-   The easiest way to do this is would be to create a 'Quick Cluster' with default
+   1. The easiest way to do this is would be to create a 'Quick Cluster' with default
    settings as described [here](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengcreatingclusterusingoke.htm#create-quick-cluster)
 2. A working `kubectl`  that is setup to connect to your cluster on OKE.
-   
-   For instance, you can get your kubeconfig to access the cluster you created
-   by using the following command
+   1. For instance, you can get your kubeconfig to access the cluster you created by using the following command
+
   ```bash
-     oci ce cluster create-kubeconfig --cluster-id <cluster_OCID>. --file $HOME/.kube/config  --region <region_name>
+oci ce cluster create-kubeconfig --cluster-id <cluster_OCID>. --file $HOME/.kube/config  --region <region_name>
   ```
-  See [documentation](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengdownloadkubeconfigfile.htm) for more details
+
+See [documentation](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengdownloadkubeconfigfile.htm) for more details
 
 ## Deploying the Kong Ingress Controller
 
