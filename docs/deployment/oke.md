@@ -3,19 +3,24 @@
 ## Requirements
 
 1. An Oracle Container Engine for Kubernetes (OKE) cluster.
+   
    The easiest way to do this is would be to create a 'Quick Cluster' with default
    settings as described [here](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengcreatingclusterusingoke.htm#create-quick-cluster)
 2. A working `kubectl`  that is setup to connect to your cluster on OKE.
+   
    For instance, you can get your kubeconfig to access the cluster you created
-   by using:
-
+   by using the following command
   ```bash
      oci ce cluster create-kubeconfig --cluster-id <cluster_OCID>. --file $HOME/.kube/config  --region <region_name>
   ```
   See [documentation](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengdownloadkubeconfigfile.htm) for more details
-## Deploy Kong Ingress Controller
 
-## Update User Permissions
+## Deploying the Kong Ingress Controller
+
+We first need to ensure that the user has the sufficient privileges to modify the cluster.
+Once the user permissions are setup, we can deploy the kubernetes objects that make up the Kong Ingress Controller.
+
+### Update User Permissions
 
 For most operations on Kubernetes clusters created and managed by Container Engine for Kubernetes,
 Oracle Cloud Infrastructure Identity and Access Management (IAM) provides access control.
@@ -55,7 +60,7 @@ subjects:
 
 For more information on Access Control on OKE, see our [documentation](https://docs.cloud.oracle.com/iaas/Content/ContEng/Concepts/contengaboutaccesscontrol.htm)
 
-## Deploy Kong
+### Deploy Kong
 
 You can now deploy Kong:
 
@@ -122,7 +127,7 @@ Should display:
 
 ```
 
-## Test your deployment
+### Test your deployment
 
 - Deploy a dummy application :
   
@@ -184,5 +189,5 @@ spec:
 
 ```
 
-### Setup TLS (HTTPS)
+## Setup TLS (HTTPS)
 TODO
