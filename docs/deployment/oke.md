@@ -7,10 +7,9 @@
    settings as described [here](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengcreatingclusterusingoke.htm#create-quick-cluster)
 - A working `kubectl`  that is setup to connect to your cluster on OKE.
   - For instance, you can get your kubeconfig to access the cluster you created by using the following command
-
-  ```bash
-oci ce cluster create-kubeconfig --cluster-id <cluster_OCID>. --file $HOME/.kube/config  --region <region_name>
-  ```
+  - ```bash
+    oci ce cluster create-kubeconfig --cluster-id <cluster_OCID>. --file $HOME/.kube/config  --region <region_name>
+    ```
 
 See [documentation](https://docs.cloud.oracle.com/iaas/Content/ContEng/Tasks/contengdownloadkubeconfigfile.htm) for more details
 
