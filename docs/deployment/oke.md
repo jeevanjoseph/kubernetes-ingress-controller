@@ -160,6 +160,61 @@ Should display:
 
 Now `curl -v http://129.146.215.232/dummy` should display some information, including headers showing that the response came back though Kong.
 
+```bash
+*   Trying 129.146.215.232...
+* TCP_NODELAY set
+* Connected to 129.146.215.232 (129.146.215.232) port 80 (#0)
+> GET /dummy HTTP/1.1
+> Host: 129.146.215.232
+> User-Agent: curl/7.54.0
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Content-Type: text/plain; charset=UTF-8
+< Transfer-Encoding: chunked
+< Connection: keep-alive
+< Date: Fri, 15 Mar 2019 19:20:01 GMT
+< Server: echoserver
+< X-Kong-Upstream-Latency: 0
+< X-Kong-Proxy-Latency: 1
+< Via: kong/1.0.3
+<
+
+
+Hostname: http-svc-66ffffc458-q9594
+
+Pod Information:
+        node name:      129.146.119.120
+        pod name:       http-svc-66ffffc458-q9594
+        pod namespace:  dummy
+        pod IP: 10.244.1.107
+
+Server values:
+        server_version=nginx: 1.13.3 - lua: 10008
+
+Request Information:
+        client_address=10.244.1.114
+        method=GET
+        real path=/dummy
+        query=
+        request_version=1.1
+        request_uri=http://10.244.1.107:8080/dummy
+
+Request Headers:
+        accept=*/*
+        connection=keep-alive
+        host=10.244.1.107:8080
+        user-agent=curl/7.54.0
+        x-forwarded-for=10.244.2.0
+        x-forwarded-host=129.146.215.232
+        x-forwarded-port=8000
+        x-forwarded-proto=http
+        x-real-ip=10.244.2.0
+
+Request Body:
+        -no body in request-
+```
+
 ## Bonus: Expose the Kong admin API
 
 If you want to expose the Kong admin API,
