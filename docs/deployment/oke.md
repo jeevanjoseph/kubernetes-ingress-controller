@@ -232,8 +232,7 @@ metadata:
     kubernetes.io/ingress.class: "kong"
 spec:
   rules:
-    - host: dummy.kong.example
-      http:
+    - http:
         paths:
           - path: "/"
             backend:
