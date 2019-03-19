@@ -60,7 +60,8 @@ For more information on Access Control on OKE, see our [documentation](https://d
 
 ### Deploy Kong
 
-You can now deploy Kong:
+The command below sets up all the required Kubernetes objects in your cluster.
+ Note that the YAML file used below creates a new namespace `kong` and sets up the objects in this new namespace.
 
 ```bash
 
@@ -240,6 +241,3 @@ spec:
               servicePort: 8001" | kubectl apply -f -
 
 ```
-
-## Setup TLS (HTTPS)
-TODO
