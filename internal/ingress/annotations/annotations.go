@@ -17,37 +17,58 @@ limitations under the License.
 package annotations
 
 import (
-	"fmt"
 	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// pluginAnnotationSuffix sufix of kong annotations to configure plugins
-const pluginAnnotationSuffix = "plugin.konghq.com"
+const (
+	ingressClassKey = "kubernetes.io/ingress.class"
 
-const pluginListAnnotation = "plugins.konghq.com"
+	pluginsAnnotationKey = "plugins.konghq.com"
 
-const configurationAnnotation = "configuration.konghq.com"
+	configurationAnnotationKey = "configuration.konghq.com"
 
-// ExtractKongPluginAnnotations extracts information about kong plugins
-// configured using plugin.konghq.com annotation.
-// DEPRECATED, please use ExtractKongPluginsFromAnnotations instead.
-func ExtractKongPluginAnnotations(anns map[string]string) map[string][]string {
-	ka := make(map[string][]string, 0)
-	for k, v := range anns {
-		if strings.HasSuffix(k, pluginAnnotationSuffix) {
-			name := strings.TrimSuffix(k, fmt.Sprintf(".%v", pluginAnnotationSuffix))
-			var values []string
-			for _, line := range strings.Split(v, "\n") {
-				s := strings.TrimSpace(strings.TrimPrefix(line, "-"))
-				if s != "" {
-					values = append(values, s)
-				}
-			}
-			ka[name] = values
-		}
+	// DefaultIngressClass defines the default class used
+	// by Kong's ingres controller.
+	DefaultIngressClass = "kong"
+)
+
+func validIngress(ingressAnnotationValue, ingressClass string) bool {
+	// we have 2 valid combinations
+	// 1 - ingress with default class | blank annotation on ingress
+	// 2 - ingress with specific class | same annotation on ingress
+	//
+	// and 2 invalid combinations
+	// 3 - ingress with default class | fixed annotation on ingress
+	// 4 - ingress with specific class | different annotation on ingress
+	if ingressAnnotationValue == "" && ingressClass == DefaultIngressClass {
+		return true
 	}
+	return ingressAnnotationValue == ingressClass
+}
 
-	return ka
+// IngressClassValidatorFunc returns a function which can valid if an object
+// belongs to an the ingressClass or not.
+func IngressClassValidatorFunc(
+	ingressClass string) func(obj metav1.Object) bool {
+
+	return func(obj metav1.Object) bool {
+		ingress := obj.GetAnnotations()[ingressClassKey]
+		return validIngress(ingress, ingressClass)
+	}
+}
+
+// IngressClassValidatorFuncFromObjectMeta returns a function which
+// can valid if an ObjectMeta
+// belongs to an the ingressClass or not.
+func IngressClassValidatorFuncFromObjectMeta(
+	ingressClass string) func(obj *metav1.ObjectMeta) bool {
+
+	return func(obj *metav1.ObjectMeta) bool {
+		ingress := obj.GetAnnotations()[ingressClassKey]
+		return validIngress(ingress, ingressClass)
+	}
 }
 
 // ExtractKongPluginsFromAnnotations extracts information about Kong
@@ -55,7 +76,7 @@ func ExtractKongPluginAnnotations(anns map[string]string) map[string][]string {
 // This returns a list of KongPlugin resource names that should be applied.
 func ExtractKongPluginsFromAnnotations(anns map[string]string) []string {
 	var kongPluginCRs []string
-	v, ok := anns[pluginListAnnotation]
+	v, ok := anns[pluginsAnnotationKey]
 	if !ok {
 		return kongPluginCRs
 	}
@@ -71,5 +92,5 @@ func ExtractKongPluginsFromAnnotations(anns map[string]string) []string {
 // ExtractConfigurationName extracts the name of the KongIngress object that holds
 // information about the configuration to use in Routes, Services and Upstreams
 func ExtractConfigurationName(anns map[string]string) string {
-	return anns[configurationAnnotation]
+	return anns[configurationAnnotationKey]
 }

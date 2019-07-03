@@ -1,4 +1,4 @@
-
+---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
@@ -42,9 +42,23 @@ spec:
           type: boolean
         config:
           type: object
+        run_on:
+          type: string
+          enum:
+          - first
+          - second
+          - all
+        protocols:
+          type: array
+          items:
+            type: string
+            enum:
+            - http
+            - https
+            - tcp
+            - tls
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
@@ -76,7 +90,6 @@ spec:
           type: string
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
@@ -113,7 +126,6 @@ spec:
           type: string
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
@@ -151,6 +163,8 @@ spec:
                 enum:
                 - http
                 - https
+            https_redirect_status_code:
+              type: integer
         proxy:
           type: object
           properties:
@@ -244,5 +258,3 @@ spec:
                   properties:
                     healthy: *healthy
                     unhealthy: *unhealthy
-
----

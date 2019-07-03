@@ -23,7 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eapache/channels"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/annotations"
 	"github.com/kong/kubernetes-ingress-controller/internal/ingress/controller"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/store"
 )
 
 func TestCreateApiserverClient(t *testing.T) {
@@ -75,9 +78,15 @@ func TestHandleSigterm(t *testing.T) {
 
 	conf.Kong = controller.Kong{}
 
-	ngx := controller.NewNGINXController(conf)
+	kong, err := controller.NewKongController(conf,
+		channels.NewRingChannel(1024),
+		store.New(
+			store.CacheStores{},
+			annotations.IngressClassValidatorFuncFromObjectMeta(conf.IngressClass),
+		),
+	)
 
-	go handleSigterm(ngx, func(code int) {
+	go handleSigterm(kong, make(chan struct{}), func(code int) {
 		if code != 1 {
 			t.Errorf("expected exit code 1 but %v received", code)
 		}

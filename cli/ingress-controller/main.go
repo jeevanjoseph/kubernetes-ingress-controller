@@ -27,35 +27,35 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/blang/semver"
+	"github.com/eapache/channels"
 	"github.com/golang/glog"
+	"github.com/hbagdi/go-kong/kong"
+	configurationclientv1 "github.com/kong/kubernetes-ingress-controller/internal/client/configuration/clientset/versioned"
+	configurationinformer "github.com/kong/kubernetes-ingress-controller/internal/client/configuration/informers/externalversions"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/annotations"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/controller"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/store"
+	"github.com/kong/kubernetes-ingress-controller/internal/ingress/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	discovery "k8s.io/apimachinery/pkg/version"
-	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/hbagdi/go-kong/kong"
-	consumerintscheme "github.com/kong/kubernetes-ingress-controller/internal/client/plugin/clientset/versioned/scheme"
-	pluginintscheme "github.com/kong/kubernetes-ingress-controller/internal/client/plugin/clientset/versioned/scheme"
-	"github.com/kong/kubernetes-ingress-controller/internal/ingress/controller"
-	"github.com/kong/kubernetes-ingress-controller/internal/k8s"
-	"github.com/kong/kubernetes-ingress-controller/version"
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	fmt.Println(version.String())
+	fmt.Println(version())
 
 	showVersion, conf, err := parseFlags()
 	if showVersion {
@@ -71,29 +71,11 @@ func main() {
 		handleFatalInitError(err)
 	}
 
-	// Add types to the default Kubernetes Scheme
-	pluginintscheme.AddToScheme(scheme.Scheme)
-	consumerintscheme.AddToScheme(scheme.Scheme)
-
-	ns, name, err := k8s.ParseNameNS(conf.DefaultService)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	_, err = kubeClient.CoreV1().Services(ns).Get(name, metav1.GetOptions{})
-	if err != nil {
-		if strings.Contains(err.Error(), "cannot get services in the namespace") {
-			glog.Fatalf("✖ It seems the cluster it is running with Authorization enabled (like RBAC) and there is no permissions for the ingress controller. Please check the configuration")
-		}
-		glog.Fatalf("no service with name %v found: %v", conf.DefaultService, err)
-	}
-	glog.Infof("validated %v as the default backend", conf.DefaultService)
-
 	if conf.PublishService == "" {
 		glog.Fatal("flag --publish-address is mandatory")
 	}
 
-	ns, name, err = k8s.ParseNameNS(conf.PublishService)
+	ns, name, err := utils.ParseNameNS(conf.PublishService)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -164,30 +146,132 @@ func main() {
 	}
 
 	glog.Infof("kong version: %s", v)
+	kongConfiguration := root["configuration"].(map[string]interface{})
+	conf.Kong.Version = v
+	glog.Infof("Kong datastore: %s", kongConfiguration["database"].(string))
+
+	if kongConfiguration["database"].(string) == "off" {
+		conf.Kong.InMemory = true
+	}
+	req, _ := http.NewRequest("GET",
+		conf.Kong.URL+"/tags", nil)
+	res, err := kongClient.Do(nil, req, nil)
+	if err == nil && res.StatusCode == 200 {
+		conf.Kong.HasTagSupport = true
+	}
+
+	// setup workspace in Kong Enterprise
+	if conf.Kong.Workspace != "" {
+		kongClient, err = kong.NewClient(kong.String(conf.Kong.URL+"/"+conf.Kong.Workspace), c)
+		if err != nil {
+			glog.Fatalf("Error creating Kong Rest client: %v", err)
+		}
+	}
 	conf.Kong.Client = kongClient
 
-	ngx := controller.NewNGINXController(conf)
+	coreInformerFactory := informers.NewSharedInformerFactoryWithOptions(
+		kubeClient,
+		conf.ResyncPeriod,
+		informers.WithNamespace(conf.Namespace),
+	)
+	confClient, _ := configurationclientv1.NewForConfig(conf.KubeConf)
+	kongInformerFactory := configurationinformer.NewSharedInformerFactoryWithOptions(
+		confClient,
+		conf.ResyncPeriod,
+		configurationinformer.WithNamespace(conf.Namespace),
+	)
 
-	go handleSigterm(ngx, func(code int) {
+	var synced []cache.InformerSynced
+	updateChannel := channels.NewRingChannel(1024)
+	reh := controller.ResourceEventHandler{
+		UpdateCh:           updateChannel,
+		IsValidIngresClass: annotations.IngressClassValidatorFunc(conf.IngressClass),
+	}
+	var informers []cache.SharedIndexInformer
+	var cacheStores store.CacheStores
+
+	ingInformer := coreInformerFactory.Extensions().V1beta1().Ingresses().Informer()
+	ingInformer.AddEventHandler(reh)
+	cacheStores.Ingress = ingInformer.GetStore()
+	informers = append(informers, ingInformer)
+
+	endpointsInformer := coreInformerFactory.Core().V1().Endpoints().Informer()
+	endpointsInformer.AddEventHandler(controller.EndpointsEventHandler{
+		UpdateCh: updateChannel,
+	})
+	cacheStores.Endpoint = endpointsInformer.GetStore()
+	informers = append(informers, endpointsInformer)
+
+	secretsInformer := coreInformerFactory.Core().V1().Secrets().Informer()
+	secretsInformer.AddEventHandler(reh)
+	cacheStores.Secret = secretsInformer.GetStore()
+	informers = append(informers, secretsInformer)
+
+	servicesInformer := coreInformerFactory.Core().V1().Services().Informer()
+	servicesInformer.AddEventHandler(reh)
+	cacheStores.Service = servicesInformer.GetStore()
+	informers = append(informers, servicesInformer)
+
+	kongIngressInformer := kongInformerFactory.Configuration().V1().KongIngresses().Informer()
+	kongIngressInformer.AddEventHandler(reh)
+	cacheStores.Configuration = kongIngressInformer.GetStore()
+	informers = append(informers, kongIngressInformer)
+
+	kongPluginInformer := kongInformerFactory.Configuration().V1().KongPlugins().Informer()
+	kongPluginInformer.AddEventHandler(reh)
+	cacheStores.Plugin = kongPluginInformer.GetStore()
+	informers = append(informers, kongPluginInformer)
+
+	kongConsumerInformer := kongInformerFactory.Configuration().V1().KongConsumers().Informer()
+	kongConsumerInformer.AddEventHandler(reh)
+	cacheStores.Consumer = kongConsumerInformer.GetStore()
+	informers = append(informers, kongConsumerInformer)
+
+	kongCredentialInformer := kongInformerFactory.Configuration().V1().KongCredentials().Informer()
+	kongCredentialInformer.AddEventHandler(reh)
+	cacheStores.Credential = kongCredentialInformer.GetStore()
+	informers = append(informers, kongCredentialInformer)
+
+	stopCh := make(chan struct{})
+	for _, informer := range informers {
+		go informer.Run(stopCh)
+		synced = append(synced, informer.HasSynced)
+	}
+	if !cache.WaitForCacheSync(stopCh, synced...) {
+		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+	}
+
+	store := store.New(
+		cacheStores,
+		annotations.IngressClassValidatorFuncFromObjectMeta(conf.IngressClass),
+	)
+	kong, err := controller.NewKongController(conf, updateChannel, store)
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	go handleSigterm(kong, stopCh, func(code int) {
 		os.Exit(code)
 	})
 
 	mux := http.NewServeMux()
-	go registerHandlers(conf.EnableProfiling, 10254, ngx, mux)
+	go registerHandlers(conf.EnableProfiling, 10254, kong, mux)
 
-	ngx.Start()
+	kong.Start()
 }
 
 type exiter func(code int)
 
-func handleSigterm(ngx *controller.NGINXController, exit exiter) {
+func handleSigterm(kong *controller.KongController, stopCh chan struct{},
+	exit exiter) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	<-signalChan
 	glog.Infof("Received SIGTERM, shutting down")
 
 	exitCode := 0
-	if err := ngx.Stop(); err != nil {
+	close(stopCh)
+	if err := kong.Stop(); err != nil {
 		glog.Infof("Error during shutdown %v", err)
 		exitCode = 1
 	}
@@ -289,17 +373,17 @@ func handleFatalInitError(err error) {
 		"https://github.com/kubernetes/ingress-nginx/blob/master/docs/troubleshooting.md", err)
 }
 
-func registerHandlers(enableProfiling bool, port int, ic *controller.NGINXController, mux *http.ServeMux) {
-	// expose health check endpoint (/healthz)
-	healthz.InstallHandler(mux,
-		healthz.PingHealthz,
-	)
+func registerHandlers(enableProfiling bool, port int, ic *controller.KongController, mux *http.ServeMux) {
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	mux.Handle("/metrics", promhttp.Handler())
 
 	mux.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		b, _ := json.Marshal(version.String())
+		b, _ := json.Marshal(version())
 		w.Write(b)
 	})
 

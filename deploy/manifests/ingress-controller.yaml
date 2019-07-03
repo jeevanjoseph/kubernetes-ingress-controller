@@ -1,4 +1,4 @@
-
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -15,7 +15,6 @@ spec:
     app: ingress-kong
 
 ---
-
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
@@ -44,7 +43,7 @@ spec:
       serviceAccountName: kong-serviceaccount
       initContainers:
       - name: wait-for-migrations
-        image: kong:1.0
+        image: kong:1.2
         command: [ "/bin/sh", "-c", "kong migrations list" ]
         env:
         - name: KONG_ADMIN_LISTEN
@@ -65,7 +64,7 @@ spec:
           value: kong
       containers:
       - name: admin-api
-        image: kong:1.0
+        image: kong:1.2
         env:
         - name: KONG_PG_PASSWORD
           value: kong
@@ -107,8 +106,6 @@ spec:
         # the kong URL points to the kong admin api server
         - --kong-url=https://localhost:8444
         - --admin-tls-skip-verify
-        # the default service is the kong proxy service
-        - --default-backend-service=kong/kong-proxy
         # Service from were we extract the IP address/es to use in Ingress status
         - --publish-service=kong/kong-proxy
         env:
@@ -122,7 +119,7 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
-        image: kong-docker-kubernetes-ingress-controller.bintray.io/kong-ingress-controller:0.3.0
+        image: kong-docker-kubernetes-ingress-controller.bintray.io/kong-ingress-controller:0.5.0
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -143,5 +140,3 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
-
----

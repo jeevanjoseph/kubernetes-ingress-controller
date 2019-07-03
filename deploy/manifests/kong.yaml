@@ -1,7 +1,4 @@
-
-
 ---
-
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
@@ -18,7 +15,7 @@ spec:
       # hack to verify that the DB is up to date or not
       # TODO remove this for Kong >= 0.15.0
       - name: wait-for-migrations
-        image: kong:1.0
+        image: kong:1.2
         command: [ "/bin/sh", "-c", "kong migrations list" ]
         env:
         - name: KONG_ADMIN_LISTEN
@@ -39,7 +36,7 @@ spec:
           value: kong
       containers:
       - name: kong-proxy
-        image: kong:1.0
+        image: kong:1.2
         env:
         - name: KONG_PG_PASSWORD
           value: kong
@@ -58,5 +55,7 @@ spec:
         - name: proxy-ssl
           containerPort: 8443
           protocol: TCP
-
----
+        lifecycle:
+          preStop:
+            exec:
+              command: [ "/bin/sh", "-c", "kong quit" ]

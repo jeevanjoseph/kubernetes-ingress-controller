@@ -41,11 +41,6 @@ config:
 plugin: <name-of-plugin> # like key-auth, rate-limiting etc
 ```
 
-- `consumerRef`, an optional field,
-  implies the plugin will be used for a particular consumer only.
-  The value of the field must reference an existing consumer
-  in the same namespace.
-  If specified, the plugin will execute for the specific consumer only.
 - `config` contains a list of `key` and `value`
   required to configure the plugin.
   All configuration values specific to the type of plugin go in here.
@@ -258,11 +253,10 @@ config:
 ```
 
 [k8s-crd]: https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/
-[kong-consumer]: https://getkong.org/docs/0.14.x/admin-api/#consumer-object
-[kong-plugin]: https://getkong.org/docs/0.14.x/admin-api/#plugin-object
+[kong-consumer]: https://getkong.org/docs/latest/admin-api/#consumer-object
+[kong-plugin]: https://getkong.org/docs/latest/admin-api/#plugin-object
 [kubectl-doc]: https://kubernetes.io/docs/reference/kubectl/overview/
-[kong-add-plugin]: https://getkong.org/docs/0.14.x/admin-api/#add-plugin
-[kong-upstream]: https://getkong.org/docs/0.14.x/admin-api/#upstream-objects
-[kong-service]: https://getkong.org/docs/0.14.x/admin-api/#service-object
-[kong-route]: https://getkong.org/docs/0.14.x/admin-api/#route-object
-
+[kong-add-plugin]: https://getkong.org/docs/latest/admin-api/#add-plugin
+[kong-upstream]: https://getkong.org/docs/latest/admin-api/#upstream-objects
+[kong-service]: https://getkong.org/docs/latest/admin-api/#service-object
+[kong-route]: https://getkong.org/docs/latest/admin-api/#route-object
